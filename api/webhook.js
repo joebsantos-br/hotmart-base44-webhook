@@ -7,77 +7,62 @@ const base44 = new Base44Client({
 
 export default async function handler(req, res) {
 
-  if (req.method !== "POST") {
-    return res.status(405).json({ message: "Method not allowed" });
-  }
+ if (req.method !== "POST") {
+   return res.status(405).json({ message: "Method not allowed" });
+ }
 
-  try {
+ try {
 
-    const payload = req.body;
+   const payload = req.body;
 
-    const event = payload.event;
-    const email = payload?.data?.buyer?.email;
-    const product = payload?.data?.product?.name;
-    const transaction = payload?.data?.purchase?.transaction;
+   const event = payload.event;
+   const email = payload?.data?.buyer?.email;
+   const product = payload?.data?.product?.name;
+   const transaction = payload?.data?.purchase?.transaction;
 
-    if (!email || !transaction) {
-      return res.status(400).json({ error: "Missing required data" });
-    }
+   if (!email || !transaction) {
+     return res.status(400).json({ error: "Missing data" });
+   }
 
-    console.log("Evento:", event, "Email:", email);
+   const existing = await base44.entities.AccessRequests.list({
+     filter: { transaction }
+   });
 
-    // procurar se já existe registro
-    const existing = await base44.entities.AccessRequests.list({
-      filter: {
-        transaction: transaction
-      }
-    });
+   if (event === "PURCHASE_APPROVED") {
 
-    if (event === "PURCHASE_APPROVED") {
+     if (existing.length === 0) {
 
-      if (existing.length === 0) {
+       await base44.entities.AccessRequests.create({
+         email,
+         product,
+         transaction,
+         status: "approved"
+       });
 
-        await base44.entities.AccessRequests.create({
-          email: email,
-          product: product,
-          transaction: transaction,
-          status: "approved"
-        });
+     }
 
-        console.log("Acesso criado");
+   }
 
-      } else {
+   if (event === "PURCHASE_REFUNDED" || event === "PURCHASE_CANCELED") {
 
-        console.log("Compra já registrada, ignorando duplicação");
+     if (existing.length > 0) {
 
-      }
+       await base44.entities.AccessRequests.update(existing[0].id, {
+         status: "revoked"
+       });
 
-    }
+     }
 
-    if (event === "PURCHASE_REFUNDED" || event === "PURCHASE_CANCELED") {
+   }
 
-      if (existing.length > 0) {
+   return res.status(200).json({ success: true });
 
-        await base44.entities.AccessRequests.update(existing[0].id, {
-          status: "revoked"
-        });
+ } catch (error) {
 
-        console.log("Acesso revogado");
+   console.error(error);
 
-      }
+   return res.status(500).json({ error: "Internal error" });
 
-    }
-
-    return res.status(200).json({ success: true });
-
-  } catch (error) {
-
-    console.error("Erro no webhook:", error);
-
-    return res.status(500).json({
-      error: "Internal error"
-    });
-
-  }
+ }
 
 }
