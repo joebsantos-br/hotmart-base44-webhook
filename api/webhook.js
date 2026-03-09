@@ -24,31 +24,46 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Missing required data" });
     }
 
-    console.log("Evento recebido:", event, email);
+    console.log("Evento:", event, "Email:", email);
+
+    // procurar se já existe registro
+    const existing = await base44.entities.AccessRequests.list({
+      filter: {
+        transaction: transaction
+      }
+    });
 
     if (event === "PURCHASE_APPROVED") {
 
-      await base44.entities.AccessRequests.create({
-        email: email,
-        product: product,
-        transaction: transaction,
-        status: "approved"
-      });
+      if (existing.length === 0) {
+
+        await base44.entities.AccessRequests.create({
+          email: email,
+          product: product,
+          transaction: transaction,
+          status: "approved"
+        });
+
+        console.log("Acesso criado");
+
+      } else {
+
+        console.log("Compra já registrada, ignorando duplicação");
+
+      }
 
     }
 
     if (event === "PURCHASE_REFUNDED" || event === "PURCHASE_CANCELED") {
 
-      const records = await base44.entities.AccessRequests.list({
-        filter: {
-          transaction: transaction
-        }
-      });
+      if (existing.length > 0) {
 
-      if (records.length > 0) {
-        await base44.entities.AccessRequests.update(records[0].id, {
+        await base44.entities.AccessRequests.update(existing[0].id, {
           status: "revoked"
         });
+
+        console.log("Acesso revogado");
+
       }
 
     }
