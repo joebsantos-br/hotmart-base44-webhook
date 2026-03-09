@@ -2,6 +2,6 @@
   "name": "hotmart-base44-webhook",
   "version": "1.0.0",
   "dependencies": {
-    "@base44/sdk": "^1.0.0"
+    "@base44/sdk": "latest"
   }
 }
