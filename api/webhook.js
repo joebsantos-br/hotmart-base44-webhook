@@ -1,68 +1,28 @@
-import { Base44Client } from "@base44/sdk";
-
-const base44 = new Base44Client({
-  apiKey: process.env.BASE44_API_KEY,
-  projectId: process.env.BASE44_PROJECT_ID,
-});
-
 export default async function handler(req, res) {
 
- if (req.method !== "POST") {
-   return res.status(405).json({ message: "Method not allowed" });
- }
+  if (req.method !== "POST") {
+    return res.status(200).json({ message: "Webhook ativo" });
+  }
 
- try {
+  try {
 
-   const payload = req.body;
+    const body = req.body;
 
-   const event = payload.event;
-   const email = payload?.data?.buyer?.email;
-   const product = payload?.data?.product?.name;
-   const transaction = payload?.data?.purchase?.transaction;
+    console.log("Webhook recebido:", body);
 
-   if (!email || !transaction) {
-     return res.status(400).json({ error: "Missing data" });
-   }
+    return res.status(200).json({
+      success: true,
+      received: body
+    });
 
-   const existing = await base44.entities.AccessRequests.list({
-     filter: { transaction }
-   });
+  } catch (error) {
 
-   if (event === "PURCHASE_APPROVED") {
+    console.error("Erro no webhook:", error);
 
-     if (existing.length === 0) {
+    return res.status(500).json({
+      error: "Erro interno"
+    });
 
-       await base44.entities.AccessRequests.create({
-         email,
-         product,
-         transaction,
-         status: "approved"
-       });
-
-     }
-
-   }
-
-   if (event === "PURCHASE_REFUNDED" || event === "PURCHASE_CANCELED") {
-
-     if (existing.length > 0) {
-
-       await base44.entities.AccessRequests.update(existing[0].id, {
-         status: "revoked"
-       });
-
-     }
-
-   }
-
-   return res.status(200).json({ success: true });
-
- } catch (error) {
-
-   console.error(error);
-
-   return res.status(500).json({ error: "Internal error" });
-
- }
+  }
 
 }
