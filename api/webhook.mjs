@@ -15,8 +15,10 @@ export default async function handler(req, res) {
   const product = body?.data?.product?.name;
   const transaction = body?.data?.purchase?.transaction;
 
-  // IMPORTANTE: logue o evento para ver o nome exato que a Hotmart envia
-  console.log("Evento recebido:", JSON.stringify({ event, email, transaction }));
+  // Detecta se é um Order Bump
+  const isOrderBump = body?.data?.order_bump?.is_order_bump === true;
+
+  console.log("Evento recebido:", JSON.stringify({ event, email, transaction, isOrderBump }));
 
   if (event === "PURCHASE_APPROVED") {
     if (!transaction) {
@@ -33,16 +35,22 @@ export default async function handler(req, res) {
       email, product, transaction,
       status: "approved",
       processed: false,
+      orderbump: isOrderBump,
     });
 
-    console.log("Acesso criado para:", email);
+    console.log("Acesso criado para:", email, "| OrderBump:", isOrderBump);
     return res.status(200).json({ received: true });
   }
 
   if (event === "PURCHASE_CANCELLED" || event === "PURCHASE_REFUNDED" || event === "PURCHASE_CANCELED") {
     const premiumList = await base44.entities.PremiumAccess.filter({ user_id: email });
-    for (const record of premiumList) {  // ← era "req", conflitava com o handler
-      await base44.entities.PremiumAccess.update(record.id, { ativo: false });
+    for (const record of premiumList) {
+      // Se é cancelamento do orderbump, só revoga o orderbump
+      if (isOrderBump) {
+        await base44.entities.PremiumAccess.update(record.id, { orderbump: false });
+      } else {
+        await base44.entities.PremiumAccess.update(record.id, { ativo: false });
+      }
     }
 
     const accessList = await base44.entities.AccessRequests.filter({ transaction });
@@ -50,7 +58,7 @@ export default async function handler(req, res) {
       await base44.entities.AccessRequests.update(record.id, { status: "cancelled" });
     }
 
-    console.log("Acesso revogado para:", email);
+    console.log("Acesso revogado para:", email, "| OrderBump:", isOrderBump);
     return res.status(200).json({ received: true, revoked: true });
   }
 
