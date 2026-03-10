@@ -24,7 +24,9 @@ export default async function handler(req, res) {
     const url = `https://baby-bites-hub.base44.app/webhookaccess?email=${encodeURIComponent(email)}&product=${encodeURIComponent(product)}&transaction=${encodeURIComponent(transaction)}`
 
     // Envia dados para o Base44
-    await fetch(url)
+    await fetch(url, {
+  method: "GET"
+})
 
     console.log("Enviado para Base44")
 
