@@ -1,5 +1,6 @@
 export default async function handler(req, res) {
 
+  // Permite testar no navegador
   if (req.method !== "POST") {
     return res.status(200).json({ message: "Webhook ativo" })
   }
@@ -10,6 +11,7 @@ export default async function handler(req, res) {
 
     const event = body?.event
 
+    // Ignora eventos que não são compra aprovada
     if (event !== "PURCHASE_APPROVED") {
       console.log("Evento ignorado:", event)
       return res.status(200).json({ received: true })
@@ -19,19 +21,21 @@ export default async function handler(req, res) {
     const product = body?.data?.product?.name
     const transaction = body?.data?.purchase?.transaction
 
-    console.log("Email:", email)
+    console.log("Compra recebida:", email)
 
-    const url = `https://app.base44.com/apps/6982aeeac07b5fe31993f3f1/webhook-access?email=${encodeURIComponent(email)}&product=${encodeURIComponent(product)}&transaction=${encodeURIComponent(transaction)}`
+    // URL do Base44
+    const url = `https://baby-bites-hub.base44.app/webhookaccess?email=${encodeURIComponent(email)}&product=${encodeURIComponent(product)}&transaction=${encodeURIComponent(transaction)}`
 
+    // Envia dados para o Base44
     await fetch(url)
 
-    console.log("Registro enviado ao Base44")
+    console.log("Enviado para Base44")
 
     return res.status(200).json({ received: true })
 
   } catch (error) {
 
-    console.error("Erro no webhook:", error)
+    console.error("Erro:", error)
 
     return res.status(200).json({
       received: true,
