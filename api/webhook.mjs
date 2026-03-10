@@ -10,28 +10,51 @@ export default async function handler(req, res) {
   }
 
   const body = req.body;
+  const event = body?.event;
   const email = body?.data?.buyer?.email;
   const product = body?.data?.product?.name;
   const transaction = body?.data?.purchase?.transaction;
 
-  console.log("Compra recebida:", email, transaction);
+  console.log("Evento recebido:", event, email);
 
-  // Verifica se já existe um registro com essa transaction
-  const existing = await base44.entities.AccessRequests.filter({ transaction });
+  // Compra aprovada → cria acesso
+  if (event === "PURCHASE_APPROVED") {
+    const existing = await base44.entities.AccessRequests.filter({ transaction });
+    if (existing && existing.length > 0) {
+      console.log("Duplicata ignorada:", transaction);
+      return res.status(200).json({ received: true, duplicate: true });
+    }
 
-  if (existing && existing.length > 0) {
-    console.log("Duplicata ignorada:", transaction);
-    return res.status(200).json({ received: true, duplicate: true });
+    await base44.entities.AccessRequests.create({
+      email,
+      product,
+      transaction,
+      status: "approved",
+      processed: false,
+    });
+
+    console.log("Acesso criado para:", email);
+    return res.status(200).json({ received: true });
   }
 
-  await base44.entities.AccessRequests.create({
-    email,
-    product,
-    transaction,
-    status: "approved",
-    processed: false,
-  });
+  // Cancelamento ou reembolso → revoga acesso
+  if (event === "PURCHASE_CANCELLED" || event === "PURCHASE_REFUNDED") {
+    // Desativa o PremiumAccess pelo email (user_id = email)
+    const premiumList = await base44.entities.PremiumAccess.filter({ user_id: email });
+    for (const premium of premiumList) {
+      await base44.entities.PremiumAccess.update(premium.id, { ativo: false });
+    }
 
-  console.log("Registrado no Base44!");
-  return res.status(200).json({ received: true });
+    // Marca o AccessRequest como cancelado
+    const requests = await base44.entities.AccessRequests.filter({ transaction });
+    for (const req of requests) {
+      await base44.entities.AccessRequests.update(req.id, { status: "cancelled" });
+    }
+
+    console.log("Acesso revogado para:", email);
+    return res.status(200).json({ received: true, revoked: true });
+  }
+
+  // Qualquer outro evento, ignora
+  return res.status(200).json({ received: true, ignored: true });
 }
