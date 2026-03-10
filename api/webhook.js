@@ -6,12 +6,7 @@ export default async function handler(req, res) {
 
   try {
 
-    const { Base44 } = await import("@base44/sdk");
-
-    const base44 = new Base44({
-      apiKey: process.env.BASE44_API_KEY,
-      projectId: process.env.BASE44_PROJECT_ID
-    });
+    const base44 = await import("@base44/sdk");
 
     const body = req.body;
 
@@ -39,8 +34,7 @@ export default async function handler(req, res) {
     console.error("Erro no webhook:", error);
 
     return res.status(500).json({
-      error: "Erro interno",
-      details: error.message
+      error: error.message
     });
 
   }
