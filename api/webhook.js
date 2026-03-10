@@ -15,6 +15,19 @@ export default async function handler(req, res) {
     const transaction = body?.data?.purchase?.transaction
 
     console.log("Email:", email)
+    await fetch(process.env.BASE44_API_URL, {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    "Authorization": `Bearer ${process.env.BASE44_API_KEY}`
+  },
+  body: JSON.stringify({
+    email: email,
+    product: product,
+    transaction: transaction,
+    status: "approved"
+  })
+})
 
     // aqui você pode salvar no Base44 depois
 
