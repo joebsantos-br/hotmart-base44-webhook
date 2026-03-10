@@ -1,7 +1,7 @@
 import { createClient } from "@base44/sdk";
 
 const base44 = createClient({
-  appId: "SEU_APP_ID"
+  appId: "6982aeeac07b5fe31993f3f1"
 });
 
 export default async function handler(req, res) {
