@@ -12,10 +12,7 @@ export default async function handler(req, res) {
     const event = body?.event
 
     // Ignora eventos que não são compra aprovada
-    if (event !== "PURCHASE_APPROVED") {
-      console.log("Evento ignorado:", event)
-      return res.status(200).json({ received: true })
-    }
+    console.log("Evento recebido:", event)
 
     const email = body?.data?.buyer?.email
     const product = body?.data?.product?.name
