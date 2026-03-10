@@ -1,10 +1,3 @@
-import { Base44 } from "@base44/sdk";
-
-const base44 = new Base44({
-  apiKey: process.env.BASE44_API_KEY,
-  projectId: process.env.BASE44_PROJECT_ID
-});
-
 export default async function handler(req, res) {
 
   if (req.method !== "POST") {
@@ -12,6 +5,13 @@ export default async function handler(req, res) {
   }
 
   try {
+
+    const { Base44 } = await import("@base44/sdk");
+
+    const base44 = new Base44({
+      apiKey: process.env.BASE44_API_KEY,
+      projectId: process.env.BASE44_PROJECT_ID
+    });
 
     const body = req.body;
 
@@ -22,9 +22,9 @@ export default async function handler(req, res) {
     const transaction = body?.purchase?.transaction || "HP_TEST";
 
     await base44.data.AccessRequests.create({
-      email,
-      product,
-      transaction,
+      email: email,
+      product: product,
+      transaction: transaction,
       status: "approved"
     });
 
@@ -39,7 +39,8 @@ export default async function handler(req, res) {
     console.error("Erro no webhook:", error);
 
     return res.status(500).json({
-      error: "Erro interno"
+      error: "Erro interno",
+      details: error.message
     });
 
   }
