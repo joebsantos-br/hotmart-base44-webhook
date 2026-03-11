@@ -4,7 +4,6 @@ const base44 = createClient({
   appId: "6982aeeac07b5fe31993f3f1"
 });
 
-// ID do produto Planificación Semanal (extraído de pay.hotmart.com/P104845969E)
 const ORDERBUMP_PRODUCT_ID = "104845969";
 
 export default async function handler(req, res) {
@@ -12,62 +11,65 @@ export default async function handler(req, res) {
     return res.status(200).json({ message: "Webhook ativo" });
   }
 
-  const body = req.body;
-  const event = body?.event;
-  const email = body?.data?.buyer?.email;
-  const product = body?.data?.product?.name;
-  const productId = String(body?.data?.product?.id || "");
-  const transaction = body?.data?.purchase?.transaction;
+  try {
+    const body = req.body;
+    const event = body?.event;
+    const email = body?.data?.buyer?.email;
+    const product = body?.data?.product?.name;
+    const productId = String(body?.data?.product?.id || "");
+    const transaction = body?.data?.purchase?.transaction;
 
-  // Cenário 1: veio como order bump no checkout principal
-  // Cenário 2: produto da Planificación comprado diretamente pelo app
-  const isOrderBump =
-    body?.data?.order_bump?.is_order_bump === true ||
-    productId === ORDERBUMP_PRODUCT_ID;
+    const isOrderBump =
+      body?.data?.order_bump?.is_order_bump === true ||
+      productId === ORDERBUMP_PRODUCT_ID;
 
-  console.log("Evento recebido:", JSON.stringify({ event, email, transaction, product, productId, isOrderBump }));
+    console.log("Evento recebido:", JSON.stringify({ event, email, transaction, product, productId, isOrderBump }));
 
-  if (event === "PURCHASE_APPROVED") {
-    if (!transaction) {
-      return res.status(200).json({ received: true, skipped: "no transaction" });
-    }
-
-    const existing = await base44.entities.AccessRequests.filter({ transaction });
-    if (existing && existing.length > 0) {
-      console.log("Duplicata ignorada:", transaction);
-      return res.status(200).json({ received: true, duplicate: true });
-    }
-
-    await base44.entities.AccessRequests.create({
-      email, product, transaction,
-      status: "approved",
-      processed: false,
-      orderbump: isOrderBump,
-    });
-
-    console.log("Acesso criado para:", email, "| OrderBump:", isOrderBump);
-    return res.status(200).json({ received: true });
-  }
-
-  if (event === "PURCHASE_CANCELLED" || event === "PURCHASE_REFUNDED" || event === "PURCHASE_CANCELED") {
-    const premiumList = await base44.entities.PremiumAccess.filter({ user_id: email });
-    for (const record of premiumList) {
-      // Cancela só o orderbump se for esse produto, sem revogar o acesso principal
-      if (isOrderBump) {
-        await base44.entities.PremiumAccess.update(record.id, { orderbump: false });
-      } else {
-        await base44.entities.PremiumAccess.update(record.id, { ativo: false });
+    if (event === "PURCHASE_APPROVED") {
+      if (!transaction) {
+        return res.status(200).json({ received: true, skipped: "no transaction" });
       }
+
+      const existing = await base44.entities.AccessRequests.filter({ transaction });
+      if (existing && existing.length > 0) {
+        console.log("Duplicata ignorada:", transaction);
+        return res.status(200).json({ received: true, duplicate: true });
+      }
+
+      await base44.entities.AccessRequests.create({
+        email, product, transaction,
+        status: "approved",
+        processed: false,
+        orderbump: isOrderBump,
+      });
+
+      console.log("Acesso criado para:", email, "| OrderBump:", isOrderBump);
+      return res.status(200).json({ received: true });
     }
 
-    const accessList = await base44.entities.AccessRequests.filter({ transaction });
-    for (const record of accessList) {
-      await base44.entities.AccessRequests.update(record.id, { status: "cancelled" });
+    if (event === "PURCHASE_CANCELLED" || event === "PURCHASE_REFUNDED" || event === "PURCHASE_CANCELED") {
+      const premiumList = await base44.entities.PremiumAccess.filter({ user_id: email });
+      for (const record of premiumList) {
+        if (isOrderBump) {
+          await base44.entities.PremiumAccess.update(record.id, { orderbump: false });
+        } else {
+          await base44.entities.PremiumAccess.update(record.id, { ativo: false });
+        }
+      }
+
+      const accessList = await base44.entities.AccessRequests.filter({ transaction });
+      for (const record of accessList) {
+        await base44.entities.AccessRequests.update(record.id, { status: "cancelled" });
+      }
+
+      console.log("Acesso revogado para:", email, "| OrderBump:", isOrderBump);
+      return res.status(200).json({ received: true, revoked: true });
     }
 
-    console.log("Acesso revogado para:", email, "| OrderBump:", isOrderBump);
-    return res.status(200).json({ received: true, revoked: true });
+    return res.status(200).json({ received: true, ignored: event });
+
+  } catch (err) {
+    console.error("ERRO no webhook:", err.message, err.stack);
+    return res.status(500).json({ error: err.message });
   }
-
-  return res.status(200).json({ received: true, ignored: event });
 }
