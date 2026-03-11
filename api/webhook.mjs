@@ -4,6 +4,9 @@ const base44 = createClient({
   appId: "6982aeeac07b5fe31993f3f1"
 });
 
+// ID do produto Planificación Semanal (extraído de pay.hotmart.com/P104845969E)
+const ORDERBUMP_PRODUCT_ID = "104845969";
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(200).json({ message: "Webhook ativo" });
@@ -13,12 +16,16 @@ export default async function handler(req, res) {
   const event = body?.event;
   const email = body?.data?.buyer?.email;
   const product = body?.data?.product?.name;
+  const productId = String(body?.data?.product?.id || "");
   const transaction = body?.data?.purchase?.transaction;
 
-  // Detecta se é um Order Bump
-  const isOrderBump = body?.data?.order_bump?.is_order_bump === true;
+  // Cenário 1: veio como order bump no checkout principal
+  // Cenário 2: produto da Planificación comprado diretamente pelo app
+  const isOrderBump =
+    body?.data?.order_bump?.is_order_bump === true ||
+    productId === ORDERBUMP_PRODUCT_ID;
 
-  console.log("Evento recebido:", JSON.stringify({ event, email, transaction, isOrderBump }));
+  console.log("Evento recebido:", JSON.stringify({ event, email, transaction, product, productId, isOrderBump }));
 
   if (event === "PURCHASE_APPROVED") {
     if (!transaction) {
@@ -45,7 +52,7 @@ export default async function handler(req, res) {
   if (event === "PURCHASE_CANCELLED" || event === "PURCHASE_REFUNDED" || event === "PURCHASE_CANCELED") {
     const premiumList = await base44.entities.PremiumAccess.filter({ user_id: email });
     for (const record of premiumList) {
-      // Se é cancelamento do orderbump, só revoga o orderbump
+      // Cancela só o orderbump se for esse produto, sem revogar o acesso principal
       if (isOrderBump) {
         await base44.entities.PremiumAccess.update(record.id, { orderbump: false });
       } else {
