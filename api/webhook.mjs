@@ -25,14 +25,20 @@ export default async function handler(req, res) {
 
     console.log("Evento recebido:", JSON.stringify({ event, email, transaction, product, productId, isOrderBump }));
 
-    if (event === "PURCHASE_APPROVED") {
-      if (!transaction) {
-        return res.status(200).json({ received: true, skipped: "no transaction" });
-      }
+    if (!transaction) {
+      return res.status(200).json({ received: true, skipped: "no transaction" });
+    }
 
-      const existing = await base44.entities.AccessRequests.filter({ transaction });
+    // --- LÓGICA DE COMPRA APROVADA ---
+    if (event === "PURCHASE_APPROVED") {
+      // Verifica se já existe um registro de APROVAÇÃO para esta transação
+      const existing = await base44.entities.AccessRequests.filter({ 
+        transaction: transaction,
+        status: "approved" 
+      });
+
       if (existing && existing.length > 0) {
-        console.log("Duplicata ignorada:", transaction);
+        console.log("Duplicata de APROVAÇÃO ignorada:", transaction);
         return res.status(200).json({ received: true, duplicate: true });
       }
 
@@ -47,7 +53,10 @@ export default async function handler(req, res) {
       return res.status(200).json({ received: true });
     }
 
+    // --- LÓGICA DE CANCELAMENTO / REEMBOLSO ---
     if (event === "PURCHASE_CANCELLED" || event === "PURCHASE_REFUNDED" || event === "PURCHASE_CANCELED") {
+      
+      // 1. Atualiza a tabela de Acessos Premium (Bloqueio no App)
       const premiumList = await base44.entities.PremiumAccess.filter({ user_id: email });
       for (const record of premiumList) {
         if (isOrderBump) {
@@ -57,19 +66,24 @@ export default async function handler(req, res) {
         }
       }
 
+      // 2. Atualiza o status na tabela de pedidos para 'cancelled'
+      // Aqui removemos a trava de duplicata para permitir a atualização
       const accessList = await base44.entities.AccessRequests.filter({ transaction });
       for (const record of accessList) {
-        await base44.entities.AccessRequests.update(record.id, { status: "cancelled" });
+        // Só atualiza se ainda não estiver cancelado
+        if (record.status !== "cancelled") {
+          await base44.entities.AccessRequests.update(record.id, { status: "cancelled" });
+        }
       }
 
-      console.log("Acesso revogado para:", email, "| OrderBump:", isOrderBump);
+      console.log("Acesso revogado com sucesso para:", email);
       return res.status(200).json({ received: true, revoked: true });
     }
 
     return res.status(200).json({ received: true, ignored: event });
 
   } catch (err) {
-    console.error("ERRO no webhook:", err.message, err.stack);
+    console.error("ERRO no webhook:", err.message);
     return res.status(500).json({ error: err.message });
   }
 }
